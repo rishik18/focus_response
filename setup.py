@@ -11,7 +11,7 @@ setup(
     description="This library provides functionality to measure focus levels in images",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/focus_response",
+    url="https://github.com/rishik18/focus_response",
     packages=find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
