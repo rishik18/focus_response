@@ -2,12 +2,12 @@
 focus_response - This library provides functionality to measure focus levels in images
 
 Author: Hrishikesh Kanade
-Email: rishikanade@outlook.com
+Email: kanade.hrishikesh1994@gmail.com
 """
 
 __version__ = "0.1.0"
 __author__ = "Hrishikesh Kanade"
-__email__ = "rishikanade@outlook.com"
+__email__ = "kanade.hrishikesh1994@gmail.com"
 
 # Import main functions for easy access
 from .filters import (
