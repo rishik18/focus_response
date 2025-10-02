@@ -1,0 +1,362 @@
+"""Batch processing utilities for focus detection on multiple images."""
+
+import numpy as np
+import cv2
+from pathlib import Path
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from typing import List, Dict, Tuple, Optional, Union, Callable
+import multiprocessing
+from time import time
+
+try:
+    from .filters import fuse_rdf_sum
+    from .kde import kde_on_fused
+except ImportError:
+    from filters import fuse_rdf_sum
+    from kde import kde_on_fused
+
+
+def load_image(image_path: Union[str, Path], grayscale: bool = True) -> Optional[np.ndarray]:
+    """
+    Load a single image.
+
+    Args:
+        image_path: Path to image file
+        grayscale: Load as grayscale if True
+
+    Returns:
+        Image array or None if loading failed
+    """
+    try:
+        if grayscale:
+            img = cv2.imread(str(image_path), cv2.IMREAD_GRAYSCALE)
+        else:
+            img = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
+        return img
+    except Exception as e:
+        print(f"Error loading {image_path}: {e}")
+        return None
+
+
+def load_images_parallel(
+    image_paths: List[Union[str, Path]],
+    grayscale: bool = True,
+    max_workers: Optional[int] = None
+) -> Dict[str, np.ndarray]:
+    """
+    Load multiple images in parallel.
+
+    Args:
+        image_paths: List of paths to image files
+        grayscale: Load as grayscale if True
+        max_workers: Maximum number of parallel workers (default: CPU count)
+
+    Returns:
+        Dictionary mapping image path to loaded image array
+    """
+    if not image_paths:
+        return {}
+
+    if max_workers is None:
+        max_workers = min(len(image_paths), multiprocessing.cpu_count())
+
+    results = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_path = {
+            executor.submit(load_image, path, grayscale): str(path)
+            for path in image_paths
+        }
+
+        for future in as_completed(future_to_path):
+            path = future_to_path[future]
+            try:
+                img = future.result()
+                if img is not None:
+                    results[path] = img
+            except Exception as e:
+                print(f"Error processing {path}: {e}")
+
+    return results
+
+
+def process_single_image(
+    img: np.ndarray,
+    radii: List[Tuple[int, int]],
+    top_percent: float = 25.0,
+    bandwidth_px: float = 10.0,
+    power: int = 2,
+    normalize: str = "p99",
+    include_strength: bool = False
+) -> Dict:
+    """
+    Process a single image through the focus detection pipeline.
+
+    Args:
+        img: Input image array
+        radii: List of (inner_r, outer_r) tuples for multi-scale RDF
+        top_percent: Percentage of top focus pixels for KDE
+        bandwidth_px: Gaussian bandwidth for KDE smoothing
+        power: Power for RDF computation
+        normalize: Normalization method ('none', 'p99', 'mad')
+        include_strength: Weight KDE by focus intensity if True
+
+    Returns:
+        Dictionary containing results
+    """
+    start = time()
+
+    # RDF fusion
+    fused, maps = fuse_rdf_sum(
+        img, radii,
+        power=power,
+        use_numba=False,
+        normalize=normalize,
+        parallel=True
+    )
+    fuse_time = time() - start
+
+    # KDE
+    start = time()
+    density, thr = kde_on_fused(
+        fused,
+        top_percent=top_percent,
+        bandwidth_px=bandwidth_px,
+        include_strength=include_strength,
+        clip_percentile=99.5,
+        normalize=True
+    )
+    kde_time = time() - start
+
+    return {
+        'fused': fused,
+        'density': density,
+        'threshold': thr,
+        'individual_maps': maps,
+        'fuse_time': fuse_time,
+        'kde_time': kde_time,
+        'total_time': fuse_time + kde_time
+    }
+
+
+def batch_process_images(
+    image_paths: List[Union[str, Path]],
+    radii: List[Tuple[int, int]] = None,
+    top_percent: float = 25.0,
+    bandwidth_px: float = 10.0,
+    power: int = 2,
+    normalize: str = "p99",
+    include_strength: bool = False,
+    max_workers: Optional[int] = None,
+    use_processes: bool = True,
+    progress_callback: Optional[Callable[[int, int, str], None]] = None
+) -> Dict[str, Dict]:
+    """
+    Batch process multiple images in parallel.
+
+    Args:
+        image_paths: List of paths to image files
+        radii: List of (inner_r, outer_r) tuples (default: [(1, 3)])
+        top_percent: Percentage of top focus pixels for KDE
+        bandwidth_px: Gaussian bandwidth for KDE smoothing
+        power: Power for RDF computation
+        normalize: Normalization method ('none', 'p99', 'mad')
+        include_strength: Weight KDE by focus intensity if True
+        max_workers: Maximum number of parallel workers
+        use_processes: Use ProcessPoolExecutor if True, ThreadPoolExecutor if False
+        progress_callback: Optional callback function(completed, total, current_file)
+
+    Returns:
+        Dictionary mapping image path to processing results
+    """
+    if radii is None:
+        radii = [(1, 3)]
+
+    if max_workers is None:
+        max_workers = multiprocessing.cpu_count()
+
+    # Load all images first (parallel I/O)
+    print(f"Loading {len(image_paths)} images...")
+    load_start = time()
+    images = load_images_parallel(image_paths, grayscale=True, max_workers=max_workers)
+    load_time = time() - load_start
+    print(f"Loaded {len(images)} images in {load_time:.2f}s")
+
+    if not images:
+        print("No images loaded successfully!")
+        return {}
+
+    # Process images in parallel
+    print(f"Processing {len(images)} images with {max_workers} workers...")
+    process_start = time()
+    results = {}
+    completed = 0
+
+    if use_processes:
+        # Process-based parallelism (better for CPU-bound tasks)
+        # Note: This requires the image data to be pickled, which may be slower for large images
+        # For very large images, consider thread-based parallelism instead
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            future_to_path = {
+                executor.submit(
+                    process_single_image,
+                    img, radii, top_percent, bandwidth_px, power, normalize, include_strength
+                ): path
+                for path, img in images.items()
+            }
+
+            for future in as_completed(future_to_path):
+                path = future_to_path[future]
+                try:
+                    result = future.result()
+                    results[path] = result
+                    completed += 1
+                    if progress_callback:
+                        progress_callback(completed, len(images), path)
+                    else:
+                        print(f"Completed {completed}/{len(images)}: {Path(path).name} "
+                              f"(fuse: {result['fuse_time']:.2f}s, kde: {result['kde_time']:.2f}s)")
+                except Exception as e:
+                    print(f"Error processing {path}: {e}")
+                    completed += 1
+    else:
+        # Thread-based parallelism (better for I/O-bound or when pickling is expensive)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_path = {
+                executor.submit(
+                    process_single_image,
+                    img, radii, top_percent, bandwidth_px, power, normalize, include_strength
+                ): path
+                for path, img in images.items()
+            }
+
+            for future in as_completed(future_to_path):
+                path = future_to_path[future]
+                try:
+                    result = future.result()
+                    results[path] = result
+                    completed += 1
+                    if progress_callback:
+                        progress_callback(completed, len(images), path)
+                    else:
+                        print(f"Completed {completed}/{len(images)}: {Path(path).name} "
+                              f"(fuse: {result['fuse_time']:.2f}s, kde: {result['kde_time']:.2f}s)")
+                except Exception as e:
+                    print(f"Error processing {path}: {e}")
+                    completed += 1
+
+    process_time = time() - process_start
+    print(f"\nBatch processing completed in {process_time:.2f}s")
+    print(f"Average time per image: {process_time / len(results):.2f}s")
+
+    return results
+
+
+def get_image_files(
+    folder_path: Union[str, Path],
+    extensions: Tuple[str, ...] = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif'),
+    recursive: bool = False
+) -> List[Path]:
+    """
+    Get all image files from a folder.
+
+    Args:
+        folder_path: Path to folder containing images
+        extensions: Tuple of valid file extensions
+        recursive: Search subdirectories if True
+
+    Returns:
+        List of Path objects for image files
+    """
+    folder = Path(folder_path)
+    if not folder.exists():
+        raise FileNotFoundError(f"Folder not found: {folder_path}")
+
+    if recursive:
+        image_files = []
+        for ext in extensions:
+            image_files.extend(folder.rglob(f"*{ext}"))
+            image_files.extend(folder.rglob(f"*{ext.upper()}"))
+    else:
+        image_files = []
+        for ext in extensions:
+            image_files.extend(folder.glob(f"*{ext}"))
+            image_files.extend(folder.glob(f"*{ext.upper()}"))
+
+    return sorted(image_files)
+
+
+def save_results(
+    results: Dict[str, Dict],
+    output_folder: Union[str, Path],
+    save_arrays: bool = True,
+    save_visualizations: bool = False
+):
+    """
+    Save processing results to disk with organized folder structure.
+
+    Args:
+        results: Dictionary of processing results from batch_process_images
+        output_folder: Base folder to save results
+        save_arrays: Save raw numpy arrays (.npy) if True (default: True)
+        save_visualizations: Save visualization images if True (default: False)
+
+    Folder structure:
+        output_folder/
+        ├── filter_arrays/      # Raw RDF fused maps (.npy)
+        ├── kde_arrays/         # Raw KDE density maps (.npy)
+        ├── filter_vis/         # RDF visualization images (optional)
+        └── kde_vis/            # KDE visualization images (optional)
+    """
+    output_path = Path(output_folder)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # Create subfolders
+    if save_arrays:
+        filter_arrays_path = output_path / "filter_arrays"
+        kde_arrays_path = output_path / "kde_arrays"
+        filter_arrays_path.mkdir(exist_ok=True)
+        kde_arrays_path.mkdir(exist_ok=True)
+
+    if save_visualizations:
+        filter_vis_path = output_path / "filter_vis"
+        kde_vis_path = output_path / "kde_vis"
+        filter_vis_path.mkdir(exist_ok=True)
+        kde_vis_path.mkdir(exist_ok=True)
+
+    print(f"Saving results to {output_path}...")
+
+    for img_path, result in results.items():
+        basename = Path(img_path).stem
+
+        # Save raw arrays (default)
+        if save_arrays:
+            # Save filter output (fused RDF map)
+            filter_array_path = filter_arrays_path / f"{basename}_filter.npy"
+            np.save(str(filter_array_path), result['fused'])
+
+            # Save KDE output (density map)
+            kde_array_path = kde_arrays_path / f"{basename}_kde.npy"
+            np.save(str(kde_array_path), result['density'])
+
+        # Save visualizations (optional)
+        if save_visualizations:
+            # Save filter visualization (grayscale)
+            filter_vis_img_path = filter_vis_path / f"{basename}_filter.png"
+            fused_normalized = (result['fused'] / result['fused'].max() * 255).astype(np.uint8)
+            cv2.imwrite(str(filter_vis_img_path), fused_normalized)
+
+            # Save KDE visualization (colored heatmap)
+            kde_vis_img_path = kde_vis_path / f"{basename}_kde.png"
+            density_normalized = (result['density'] * 255).astype(np.uint8)
+            density_color = cv2.applyColorMap(density_normalized, cv2.COLORMAP_JET)
+            cv2.imwrite(str(kde_vis_img_path), density_color)
+
+    # Print summary
+    print(f"\nResults saved:")
+    if save_arrays:
+        print(f"  - Filter arrays: {filter_arrays_path}")
+        print(f"  - KDE arrays: {kde_arrays_path}")
+    if save_visualizations:
+        print(f"  - Filter visualizations: {filter_vis_path}")
+        print(f"  - KDE visualizations: {kde_vis_path}")
+    print(f"  - Total images: {len(results)}")
