@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=45", "wheel"]
+requires = ["setuptools>=70,<75", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -39,6 +39,9 @@ dev = [
 [tool.black]
 line-length = 88
 target-version = ['py39']
+
+[tool.setuptools]
+packages = ["focus_response"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
