@@ -75,9 +75,8 @@ def main():
         save_results(
             results,
             output_folder,
-            save_fused=True,
-            save_density=True,
-            save_overlay=False
+            save_arrays=True,
+            save_visualizations=False
         )
 
         # Print summary statistics

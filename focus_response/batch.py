@@ -2,6 +2,7 @@
 
 import numpy as np
 import cv2
+import gc
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from typing import List, Dict, Tuple, Optional, Union, Callable
@@ -86,7 +87,8 @@ def process_single_image(
     bandwidth_px: float = 10.0,
     power: int = 2,
     normalize: str = "p99",
-    include_strength: bool = False
+    include_strength: bool = False,
+    border_mode: str = 'reflect'
 ) -> Dict:
     """
     Process a single image through the focus detection pipeline.
@@ -99,6 +101,7 @@ def process_single_image(
         power: Power for RDF computation
         normalize: Normalization method ('none', 'p99', 'mad')
         include_strength: Weight KDE by focus intensity if True
+        border_mode: Border extension method ('constant', 'reflect', 'replicate')
 
     Returns:
         Dictionary containing results
@@ -111,7 +114,8 @@ def process_single_image(
         power=power,
         use_numba=False,
         normalize=normalize,
-        parallel=True
+        parallel=True,
+        border_mode=border_mode
     )
     fuse_time = time() - start
 
@@ -152,7 +156,8 @@ def batch_process_images(
     batch_size: Optional[int] = None,
     output_folder: Optional[Union[str, Path]] = None,
     save_arrays: bool = True,
-    save_visualizations: bool = False
+    save_visualizations: bool = False,
+    border_mode: str = 'reflect'
 ) -> Dict[str, Dict]:
     """
     Batch process multiple images in parallel.
@@ -160,8 +165,8 @@ def batch_process_images(
     Args:
         image_paths: List of paths to image files
         radii: List of (inner_r, outer_r) tuples (default: [(1, 3)])
-        top_percent: Percentage of top focus pixels for KDE
-        bandwidth_px: Gaussian bandwidth for KDE smoothing
+        top_percent: Percentage of top focus pixels for KDE (0-100)
+        bandwidth_px: Gaussian bandwidth for KDE smoothing (>= 0)
         power: Power for RDF computation
         normalize: Normalization method ('none', 'p99', 'mad')
         include_strength: Weight KDE by focus intensity if True
@@ -172,12 +177,30 @@ def batch_process_images(
         output_folder: If specified, save results after each batch and clear from memory
         save_arrays: Save raw numpy arrays when output_folder is specified (default: True)
         save_visualizations: Save visualization images when output_folder is specified (default: False)
+        border_mode: Border extension method ('constant', 'reflect', 'replicate')
 
     Returns:
-        Dictionary mapping image path to processing results (empty if output_folder is specified)
+        Dictionary mapping image path to processing results.
+        Note: When output_folder is specified, results are saved to disk after each batch
+        and NOT kept in memory. The returned dictionary will be empty to conserve memory.
+        If you need results in memory, do not specify output_folder and use save_results()
+        manually after processing completes.
+
+    Raises:
+        ValueError: If parameters are out of valid range
     """
+    # Input validation
     if radii is None:
         radii = [(1, 3)]
+
+    if batch_size is not None and batch_size <= 0:
+        raise ValueError(f"batch_size must be positive, got {batch_size}")
+
+    if not (0 <= top_percent <= 100):
+        raise ValueError(f"top_percent must be in [0, 100], got {top_percent}")
+
+    if bandwidth_px < 0:
+        raise ValueError(f"bandwidth_px must be non-negative, got {bandwidth_px}")
 
     if max_workers is None:
         max_workers = multiprocessing.cpu_count()
@@ -242,62 +265,42 @@ def batch_process_images(
         batch_results = {}
         batch_completed = 0
 
-        if use_processes:
-            # Process-based parallelism (better for CPU-bound tasks)
-            # Note: This requires the image data to be pickled, which may be slower for large images
-            # For very large images, consider thread-based parallelism instead
-            with ProcessPoolExecutor(max_workers=max_workers) as executor:
-                future_to_path = {
-                    executor.submit(
-                        process_single_image,
-                        img, radii, top_percent, bandwidth_px, power, normalize, include_strength
-                    ): path
-                    for path, img in images.items()
-                }
+        # Helper function to process futures and update progress
+        def _process_future_result(future, path):
+            """Process a future result with error handling and progress tracking."""
+            nonlocal batch_completed, total_completed
+            try:
+                result = future.result()
+                batch_results[path] = result
+                batch_completed += 1
+                total_completed += 1
+                if progress_callback:
+                    progress_callback(total_completed, total_images, path)
+                else:
+                    print(f"Completed {total_completed}/{total_images}: {Path(path).name} "
+                          f"(fuse: {result['fuse_time']:.2f}s, kde: {result['kde_time']:.2f}s)")
+            except Exception as e:
+                print(f"Error processing {path}: {e}")
+                # Don't increment counters on error to maintain accurate progress
 
-                for future in as_completed(future_to_path):
-                    path = future_to_path[future]
-                    try:
-                        result = future.result()
-                        batch_results[path] = result
-                        batch_completed += 1
-                        total_completed += 1
-                        if progress_callback:
-                            progress_callback(total_completed, total_images, path)
-                        else:
-                            print(f"Completed {total_completed}/{total_images}: {Path(path).name} "
-                                  f"(fuse: {result['fuse_time']:.2f}s, kde: {result['kde_time']:.2f}s)")
-                    except Exception as e:
-                        print(f"Error processing {path}: {e}")
-                        batch_completed += 1
-                        total_completed += 1
-        else:
-            # Thread-based parallelism (better for I/O-bound or when pickling is expensive)
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                future_to_path = {
-                    executor.submit(
-                        process_single_image,
-                        img, radii, top_percent, bandwidth_px, power, normalize, include_strength
-                    ): path
-                    for path, img in images.items()
-                }
+        # Select executor based on use_processes flag
+        ExecutorClass = ProcessPoolExecutor if use_processes else ThreadPoolExecutor
+        executor_type = "Process" if use_processes else "Thread"
 
-                for future in as_completed(future_to_path):
-                    path = future_to_path[future]
-                    try:
-                        result = future.result()
-                        batch_results[path] = result
-                        batch_completed += 1
-                        total_completed += 1
-                        if progress_callback:
-                            progress_callback(total_completed, total_images, path)
-                        else:
-                            print(f"Completed {total_completed}/{total_images}: {Path(path).name} "
-                                  f"(fuse: {result['fuse_time']:.2f}s, kde: {result['kde_time']:.2f}s)")
-                    except Exception as e:
-                        print(f"Error processing {path}: {e}")
-                        batch_completed += 1
-                        total_completed += 1
+        # Note for ProcessPoolExecutor: requires image data to be pickled, which may be slower for large images
+        # For very large images, consider thread-based parallelism instead
+        with ExecutorClass(max_workers=max_workers) as executor:
+            future_to_path = {
+                executor.submit(
+                    process_single_image,
+                    img, radii, top_percent, bandwidth_px, power, normalize, include_strength, border_mode
+                ): path
+                for path, img in images.items()
+            }
+
+            for future in as_completed(future_to_path):
+                path = future_to_path[future]
+                _process_future_result(future, path)
 
         process_time = time() - process_start
         print(f"Batch {batch_idx + 1} completed in {process_time:.2f}s")
@@ -322,7 +325,11 @@ def batch_process_images(
                 if save_visualizations:
                     # Save filter visualization (grayscale)
                     filter_vis_img_path = filter_vis_path / f"{basename}_filter.png"
-                    fused_normalized = (result['fused'] / result['fused'].max() * 255).astype(np.uint8)
+                    fused_max = result['fused'].max()
+                    if fused_max > 0:
+                        fused_normalized = (result['fused'] / fused_max * 255).astype(np.uint8)
+                    else:
+                        fused_normalized = np.zeros_like(result['fused'], dtype=np.uint8)
                     cv2.imwrite(str(filter_vis_img_path), fused_normalized)
 
                     # Save KDE visualization (colored heatmap)
@@ -339,7 +346,6 @@ def batch_process_images(
         # Clear memory after each batch
         del images
         del batch_results
-        import gc
         gc.collect()
 
     overall_time = time() - overall_start
@@ -448,7 +454,11 @@ def save_results(
         if save_visualizations:
             # Save filter visualization (grayscale)
             filter_vis_img_path = filter_vis_path / f"{basename}_filter.png"
-            fused_normalized = (result['fused'] / result['fused'].max() * 255).astype(np.uint8)
+            fused_max = result['fused'].max()
+            if fused_max > 0:
+                fused_normalized = (result['fused'] / fused_max * 255).astype(np.uint8)
+            else:
+                fused_normalized = np.zeros_like(result['fused'], dtype=np.uint8)
             cv2.imwrite(str(filter_vis_img_path), fused_normalized)
 
             # Save KDE visualization (colored heatmap)

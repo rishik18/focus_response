@@ -3,9 +3,10 @@
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
+from typing import Tuple, Optional
 
 
-def _to_uint8_gray(x: np.ndarray):
+def _to_uint8_gray(x: np.ndarray) -> np.ndarray:
     """
     Convert a float array to uint8 grayscale [0, 255].
 
@@ -15,12 +16,24 @@ def _to_uint8_gray(x: np.ndarray):
     Returns:
         uint8 array normalized to [0, 255]
     """
-    x = x.astype(np.float32)
-    x = x - x.min()
-    mx = x.max()
-    if mx > 0:
-        x = x / mx
-    return (255.0 * x).clip(0, 255).astype(np.uint8)
+    # Create a copy to avoid modifying input
+    x = x.astype(np.float32, copy=True)
+
+    # Handle NaN/Inf
+    if not np.isfinite(x).all():
+        x = np.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
+
+    x_min = x.min()
+    x_max = x.max()
+
+    # Handle constant array
+    if x_max - x_min < 1e-10:  # Essentially constant
+        # Map to middle gray value
+        return np.full(x.shape, 128, dtype=np.uint8)
+
+    # Min-max normalization
+    x_norm = (x - x_min) / (x_max - x_min)
+    return (255.0 * x_norm).clip(0, 255).astype(np.uint8)
 
 
 def visualize_kde_density(
@@ -29,8 +42,8 @@ def visualize_kde_density(
     density: np.ndarray,
     show_on: str = "image",
     alpha: float = 0.45,
-    figsize=(10, 8)
-):
+    figsize: Tuple[int, int] = (10, 8)
+) -> None:
     """
     Overlay the KDE heatmap on either the original image or the fused focus map.
 
@@ -47,13 +60,30 @@ def visualize_kde_density(
     """
     assert show_on in ("image", "focus")
 
+    # Validate alpha
+    alpha = np.clip(alpha, 0.0, 1.0)
+
     H, W = fused.shape
-    # Base layer
+    # Base layer with proper type handling
     if show_on == "image":
         if img.ndim == 2:
             base_rgb = cv2.cvtColor(_to_uint8_gray(img), cv2.COLOR_GRAY2RGB)
         else:
-            base_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) if img.shape[2] == 3 else img[..., :3]
+            # Convert to uint8 first if needed
+            if img.dtype != np.uint8:
+                # Handle multi-channel images by converting to grayscale first
+                if img.shape[2] >= 3:
+                    img_gray = np.dot(img[..., :3], [0.2989, 0.5870, 0.1140])
+                else:
+                    img_gray = img[..., 0]
+                img_uint8 = _to_uint8_gray(img_gray)
+                base_rgb = cv2.cvtColor(img_uint8, cv2.COLOR_GRAY2RGB)
+            else:
+                # Assume BGR from OpenCV imread
+                if img.shape[2] >= 3:
+                    base_rgb = cv2.cvtColor(img[..., :3], cv2.COLOR_BGR2RGB)
+                else:
+                    base_rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
     else:
         base_rgb = cv2.cvtColor(_to_uint8_gray(fused), cv2.COLOR_GRAY2RGB)
 

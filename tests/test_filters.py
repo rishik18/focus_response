@@ -274,7 +274,13 @@ class TestEdgeCases:
     def test_constant_image(self):
         """Test with constant image."""
         img = np.ones((100, 100), dtype=np.float32)
-        result = rdf_focus_numpy_edgesafe(img, 1, 3)
+        result = rdf_focus_numpy_edgesafe(img, 1, 3, border_mode='constant')
 
-        # Constant image should give zero response
+        # Constant image should give zero response with constant border mode
         assert np.abs(result).max() < 1e-5
+
+        # With reflect mode, constant images may have small edge responses
+        result_reflect = rdf_focus_numpy_edgesafe(img, 1, 3, border_mode='reflect')
+        # Interior should still be near zero
+        interior = result_reflect[10:-10, 10:-10]
+        assert np.abs(interior).max() < 1e-5
