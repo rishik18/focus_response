@@ -263,29 +263,9 @@ def batch_process_images(
         print(f"Processing {len(images)} images with {max_workers} workers...")
         process_start = time()
         batch_results = {}
-        batch_completed = 0
-
-        # Helper function to process futures and update progress
-        def _process_future_result(future, path):
-            """Process a future result with error handling and progress tracking."""
-            nonlocal batch_completed, total_completed, batch_results
-            try:
-                result = future.result()
-                batch_results[path] = result
-                batch_completed += 1
-                total_completed += 1
-                if progress_callback:
-                    progress_callback(total_completed, total_images, path)
-                else:
-                    print(f"Completed {total_completed}/{total_images}: {Path(path).name} "
-                          f"(fuse: {result['fuse_time']:.2f}s, kde: {result['kde_time']:.2f}s)")
-            except Exception as e:
-                print(f"Error processing {path}: {e}")
-                # Don't increment counters on error to maintain accurate progress
 
         # Select executor based on use_processes flag
         ExecutorClass = ProcessPoolExecutor if use_processes else ThreadPoolExecutor
-        executor_type = "Process" if use_processes else "Thread"
 
         # Note for ProcessPoolExecutor: requires image data to be pickled, which may be slower for large images
         # For very large images, consider thread-based parallelism instead
@@ -300,7 +280,17 @@ def batch_process_images(
 
             for future in as_completed(future_to_path):
                 path = future_to_path[future]
-                _process_future_result(future, path)
+                try:
+                    result = future.result()
+                    batch_results[path] = result
+                    total_completed += 1
+                    if progress_callback:
+                        progress_callback(total_completed, total_images, path)
+                    else:
+                        print(f"Completed {total_completed}/{total_images}: {Path(path).name} "
+                              f"(fuse: {result['fuse_time']:.2f}s, kde: {result['kde_time']:.2f}s)")
+                except Exception as e:
+                    print(f"Error processing {path}: {e}")
 
         process_time = time() - process_start
         print(f"Batch {batch_idx + 1} completed in {process_time:.2f}s")
