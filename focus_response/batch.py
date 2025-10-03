@@ -148,7 +148,8 @@ def batch_process_images(
     include_strength: bool = False,
     max_workers: Optional[int] = None,
     use_processes: bool = True,
-    progress_callback: Optional[Callable[[int, int, str], None]] = None
+    progress_callback: Optional[Callable[[int, int, str], None]] = None,
+    batch_size: Optional[int] = None
 ) -> Dict[str, Dict]:
     """
     Batch process multiple images in parallel.
@@ -164,6 +165,7 @@ def batch_process_images(
         max_workers: Maximum number of parallel workers
         use_processes: Use ProcessPoolExecutor if True, ThreadPoolExecutor if False
         progress_callback: Optional callback function(completed, total, current_file)
+        batch_size: Maximum number of images to process at once (default: None = all at once)
 
     Returns:
         Dictionary mapping image path to processing results
@@ -174,81 +176,124 @@ def batch_process_images(
     if max_workers is None:
         max_workers = multiprocessing.cpu_count()
 
-    # Load all images first (parallel I/O)
-    print(f"Loading {len(image_paths)} images...")
-    load_start = time()
-    images = load_images_parallel(image_paths, grayscale=True, max_workers=max_workers)
-    load_time = time() - load_start
-    print(f"Loaded {len(images)} images in {load_time:.2f}s")
+    total_images = len(image_paths)
+    all_results = {}
 
-    if not images:
-        print("No images loaded successfully!")
-        return {}
+    # Handle empty input
+    if total_images == 0:
+        print("No images to process!")
+        return all_results
 
-    # Process images in parallel
-    print(f"Processing {len(images)} images with {max_workers} workers...")
-    process_start = time()
-    results = {}
-    completed = 0
+    # Process in batches if batch_size is specified
+    if batch_size is None:
+        batch_size = total_images
 
-    if use_processes:
-        # Process-based parallelism (better for CPU-bound tasks)
-        # Note: This requires the image data to be pickled, which may be slower for large images
-        # For very large images, consider thread-based parallelism instead
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            future_to_path = {
-                executor.submit(
-                    process_single_image,
-                    img, radii, top_percent, bandwidth_px, power, normalize, include_strength
-                ): path
-                for path, img in images.items()
-            }
+    num_batches = (total_images + batch_size - 1) // batch_size
+    total_completed = 0
+    overall_start = time()
 
-            for future in as_completed(future_to_path):
-                path = future_to_path[future]
-                try:
-                    result = future.result()
-                    results[path] = result
-                    completed += 1
-                    if progress_callback:
-                        progress_callback(completed, len(images), path)
-                    else:
-                        print(f"Completed {completed}/{len(images)}: {Path(path).name} "
-                              f"(fuse: {result['fuse_time']:.2f}s, kde: {result['kde_time']:.2f}s)")
-                except Exception as e:
-                    print(f"Error processing {path}: {e}")
-                    completed += 1
-    else:
-        # Thread-based parallelism (better for I/O-bound or when pickling is expensive)
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_path = {
-                executor.submit(
-                    process_single_image,
-                    img, radii, top_percent, bandwidth_px, power, normalize, include_strength
-                ): path
-                for path, img in images.items()
-            }
+    for batch_idx in range(num_batches):
+        start_idx = batch_idx * batch_size
+        end_idx = min((batch_idx + 1) * batch_size, total_images)
+        batch_paths = image_paths[start_idx:end_idx]
 
-            for future in as_completed(future_to_path):
-                path = future_to_path[future]
-                try:
-                    result = future.result()
-                    results[path] = result
-                    completed += 1
-                    if progress_callback:
-                        progress_callback(completed, len(images), path)
-                    else:
-                        print(f"Completed {completed}/{len(images)}: {Path(path).name} "
-                              f"(fuse: {result['fuse_time']:.2f}s, kde: {result['kde_time']:.2f}s)")
-                except Exception as e:
-                    print(f"Error processing {path}: {e}")
-                    completed += 1
+        print(f"\n{'='*60}")
+        print(f"Processing batch {batch_idx + 1}/{num_batches} ({len(batch_paths)} images)")
+        print(f"{'='*60}")
 
-    process_time = time() - process_start
-    print(f"\nBatch processing completed in {process_time:.2f}s")
-    print(f"Average time per image: {process_time / len(results):.2f}s")
+        # Load batch of images (parallel I/O)
+        print(f"Loading {len(batch_paths)} images...")
+        load_start = time()
+        images = load_images_parallel(batch_paths, grayscale=True, max_workers=max_workers)
+        load_time = time() - load_start
+        print(f"Loaded {len(images)} images in {load_time:.2f}s")
 
-    return results
+        if not images:
+            print("No images loaded successfully in this batch!")
+            continue
+
+        # Process images in parallel
+        print(f"Processing {len(images)} images with {max_workers} workers...")
+        process_start = time()
+        batch_results = {}
+        batch_completed = 0
+
+        if use_processes:
+            # Process-based parallelism (better for CPU-bound tasks)
+            # Note: This requires the image data to be pickled, which may be slower for large images
+            # For very large images, consider thread-based parallelism instead
+            with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                future_to_path = {
+                    executor.submit(
+                        process_single_image,
+                        img, radii, top_percent, bandwidth_px, power, normalize, include_strength
+                    ): path
+                    for path, img in images.items()
+                }
+
+                for future in as_completed(future_to_path):
+                    path = future_to_path[future]
+                    try:
+                        result = future.result()
+                        batch_results[path] = result
+                        batch_completed += 1
+                        total_completed += 1
+                        if progress_callback:
+                            progress_callback(total_completed, total_images, path)
+                        else:
+                            print(f"Completed {total_completed}/{total_images}: {Path(path).name} "
+                                  f"(fuse: {result['fuse_time']:.2f}s, kde: {result['kde_time']:.2f}s)")
+                    except Exception as e:
+                        print(f"Error processing {path}: {e}")
+                        batch_completed += 1
+                        total_completed += 1
+        else:
+            # Thread-based parallelism (better for I/O-bound or when pickling is expensive)
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_to_path = {
+                    executor.submit(
+                        process_single_image,
+                        img, radii, top_percent, bandwidth_px, power, normalize, include_strength
+                    ): path
+                    for path, img in images.items()
+                }
+
+                for future in as_completed(future_to_path):
+                    path = future_to_path[future]
+                    try:
+                        result = future.result()
+                        batch_results[path] = result
+                        batch_completed += 1
+                        total_completed += 1
+                        if progress_callback:
+                            progress_callback(total_completed, total_images, path)
+                        else:
+                            print(f"Completed {total_completed}/{total_images}: {Path(path).name} "
+                                  f"(fuse: {result['fuse_time']:.2f}s, kde: {result['kde_time']:.2f}s)")
+                    except Exception as e:
+                        print(f"Error processing {path}: {e}")
+                        batch_completed += 1
+                        total_completed += 1
+
+        process_time = time() - process_start
+        print(f"Batch {batch_idx + 1} completed in {process_time:.2f}s")
+
+        # Add batch results to overall results
+        all_results.update(batch_results)
+
+        # Clear memory after each batch
+        del images
+        del batch_results
+        import gc
+        gc.collect()
+
+    overall_time = time() - overall_start
+    print(f"\n{'='*60}")
+    print(f"All batches completed in {overall_time:.2f}s")
+    print(f"Average time per image: {overall_time / len(all_results):.2f}s" if all_results else "No images processed")
+    print(f"{'='*60}")
+
+    return all_results
 
 
 def get_image_files(
@@ -289,7 +334,8 @@ def save_results(
     results: Dict[str, Dict],
     output_folder: Union[str, Path],
     save_arrays: bool = True,
-    save_visualizations: bool = False
+    save_visualizations: bool = False,
+    clear_results: bool = False
 ):
     """
     Save processing results to disk with organized folder structure.
@@ -299,6 +345,7 @@ def save_results(
         output_folder: Base folder to save results
         save_arrays: Save raw numpy arrays (.npy) if True (default: True)
         save_visualizations: Save visualization images if True (default: False)
+        clear_results: Clear results dict after saving to free memory (default: False)
 
     Folder structure:
         output_folder/
@@ -360,3 +407,7 @@ def save_results(
         print(f"  - Filter visualizations: {filter_vis_path}")
         print(f"  - KDE visualizations: {kde_vis_path}")
     print(f"  - Total images: {len(results)}")
+
+    # Clear results to free memory if requested
+    if clear_results:
+        results.clear()
