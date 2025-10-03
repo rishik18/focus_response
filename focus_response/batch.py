@@ -149,7 +149,10 @@ def batch_process_images(
     max_workers: Optional[int] = None,
     use_processes: bool = True,
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
-    batch_size: Optional[int] = None
+    batch_size: Optional[int] = None,
+    output_folder: Optional[Union[str, Path]] = None,
+    save_arrays: bool = True,
+    save_visualizations: bool = False
 ) -> Dict[str, Dict]:
     """
     Batch process multiple images in parallel.
@@ -166,9 +169,12 @@ def batch_process_images(
         use_processes: Use ProcessPoolExecutor if True, ThreadPoolExecutor if False
         progress_callback: Optional callback function(completed, total, current_file)
         batch_size: Maximum number of images to process at once (default: None = all at once)
+        output_folder: If specified, save results after each batch and clear from memory
+        save_arrays: Save raw numpy arrays when output_folder is specified (default: True)
+        save_visualizations: Save visualization images when output_folder is specified (default: False)
 
     Returns:
-        Dictionary mapping image path to processing results
+        Dictionary mapping image path to processing results (empty if output_folder is specified)
     """
     if radii is None:
         radii = [(1, 3)]
@@ -183,6 +189,24 @@ def batch_process_images(
     if total_images == 0:
         print("No images to process!")
         return all_results
+
+    # Setup output folder if specified
+    if output_folder is not None:
+        output_path = Path(output_folder)
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        # Create subfolders
+        if save_arrays:
+            filter_arrays_path = output_path / "filter_arrays"
+            kde_arrays_path = output_path / "kde_arrays"
+            filter_arrays_path.mkdir(exist_ok=True)
+            kde_arrays_path.mkdir(exist_ok=True)
+
+        if save_visualizations:
+            filter_vis_path = output_path / "filter_vis"
+            kde_vis_path = output_path / "kde_vis"
+            filter_vis_path.mkdir(exist_ok=True)
+            kde_vis_path.mkdir(exist_ok=True)
 
     # Process in batches if batch_size is specified
     if batch_size is None:
@@ -278,8 +302,39 @@ def batch_process_images(
         process_time = time() - process_start
         print(f"Batch {batch_idx + 1} completed in {process_time:.2f}s")
 
-        # Add batch results to overall results
-        all_results.update(batch_results)
+        # Save batch results if output folder specified
+        if output_folder is not None:
+            print(f"Saving batch {batch_idx + 1} results...")
+            for img_path, result in batch_results.items():
+                basename = Path(img_path).stem
+
+                # Save raw arrays (default)
+                if save_arrays:
+                    # Save filter output (fused RDF map)
+                    filter_array_path = filter_arrays_path / f"{basename}_filter.npy"
+                    np.save(str(filter_array_path), result['fused'])
+
+                    # Save KDE output (density map)
+                    kde_array_path = kde_arrays_path / f"{basename}_kde.npy"
+                    np.save(str(kde_array_path), result['density'])
+
+                # Save visualizations (optional)
+                if save_visualizations:
+                    # Save filter visualization (grayscale)
+                    filter_vis_img_path = filter_vis_path / f"{basename}_filter.png"
+                    fused_normalized = (result['fused'] / result['fused'].max() * 255).astype(np.uint8)
+                    cv2.imwrite(str(filter_vis_img_path), fused_normalized)
+
+                    # Save KDE visualization (colored heatmap)
+                    kde_vis_img_path = kde_vis_path / f"{basename}_kde.png"
+                    density_normalized = (result['density'] * 255).astype(np.uint8)
+                    density_color = cv2.applyColorMap(density_normalized, cv2.COLORMAP_JET)
+                    cv2.imwrite(str(kde_vis_img_path), density_color)
+
+            print(f"Batch {batch_idx + 1} results saved to {output_path}")
+        else:
+            # Keep results in memory only if not saving to disk
+            all_results.update(batch_results)
 
         # Clear memory after each batch
         del images
@@ -290,7 +345,11 @@ def batch_process_images(
     overall_time = time() - overall_start
     print(f"\n{'='*60}")
     print(f"All batches completed in {overall_time:.2f}s")
-    print(f"Average time per image: {overall_time / len(all_results):.2f}s" if all_results else "No images processed")
+    if output_folder is not None:
+        print(f"Results saved to: {output_path}")
+        print(f"Average time per image: {overall_time / total_completed:.2f}s" if total_completed > 0 else "No images processed")
+    else:
+        print(f"Average time per image: {overall_time / len(all_results):.2f}s" if all_results else "No images processed")
     print(f"{'='*60}")
 
     return all_results
