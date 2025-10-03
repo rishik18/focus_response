@@ -268,7 +268,7 @@ def batch_process_images(
         # Helper function to process futures and update progress
         def _process_future_result(future, path):
             """Process a future result with error handling and progress tracking."""
-            nonlocal batch_completed, total_completed
+            nonlocal batch_completed, total_completed, batch_results
             try:
                 result = future.result()
                 batch_results[path] = result
