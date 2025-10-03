@@ -81,6 +81,7 @@ def kde_on_fused(
             density = np.minimum(density, hi)
 
     if normalize and density.max() > 0:
-        density /= (density.max() + 1e-8)
+        density = density / (density.max() + 1e-8)
+        density = density.astype(np.float32)
 
     return density, float(thr)
