@@ -17,7 +17,9 @@ except ImportError:
     from kde import kde_on_fused
 
 
-def load_image(image_path: Union[str, Path], grayscale: bool = True) -> Optional[np.ndarray]:
+def load_image(
+    image_path: Union[str, Path], grayscale: bool = True
+) -> Optional[np.ndarray]:
     """
     Load a single image.
 
@@ -42,7 +44,7 @@ def load_image(image_path: Union[str, Path], grayscale: bool = True) -> Optional
 def load_images_parallel(
     image_paths: List[Union[str, Path]],
     grayscale: bool = True,
-    max_workers: Optional[int] = None
+    max_workers: Optional[int] = None,
 ) -> Dict[str, np.ndarray]:
     """
     Load multiple images in parallel.
@@ -88,7 +90,7 @@ def process_single_image(
     power: int = 2,
     normalize: str = "p99",
     include_strength: bool = False,
-    border_mode: str = 'reflect'
+    border_mode: str = "reflect",
 ) -> Dict:
     """
     Process a single image through the focus detection pipeline.
@@ -110,12 +112,13 @@ def process_single_image(
 
     # RDF fusion
     fused, maps = fuse_rdf_sum(
-        img, radii,
+        img,
+        radii,
         power=power,
         use_numba=False,
         normalize=normalize,
         parallel=True,
-        border_mode=border_mode
+        border_mode=border_mode,
     )
     fuse_time = time() - start
 
@@ -127,18 +130,18 @@ def process_single_image(
         bandwidth_px=bandwidth_px,
         include_strength=include_strength,
         clip_percentile=99.5,
-        normalize=True
+        normalize=True,
     )
     kde_time = time() - start
 
     return {
-        'fused': fused,
-        'density': density,
-        'threshold': thr,
-        'individual_maps': maps,
-        'fuse_time': fuse_time,
-        'kde_time': kde_time,
-        'total_time': fuse_time + kde_time
+        "fused": fused,
+        "density": density,
+        "threshold": thr,
+        "individual_maps": maps,
+        "fuse_time": fuse_time,
+        "kde_time": kde_time,
+        "total_time": fuse_time + kde_time,
     }
 
 
@@ -157,7 +160,7 @@ def batch_process_images(
     output_folder: Optional[Union[str, Path]] = None,
     save_arrays: bool = True,
     save_visualizations: bool = False,
-    border_mode: str = 'reflect'
+    border_mode: str = "reflect",
 ) -> Dict[str, Dict]:
     """
     Batch process multiple images in parallel.
@@ -245,13 +248,17 @@ def batch_process_images(
         batch_paths = image_paths[start_idx:end_idx]
 
         print(f"\n{'='*60}")
-        print(f"Processing batch {batch_idx + 1}/{num_batches} ({len(batch_paths)} images)")
+        print(
+            f"Processing batch {batch_idx + 1}/{num_batches} ({len(batch_paths)} images)"
+        )
         print(f"{'='*60}")
 
         # Load batch of images (parallel I/O)
         print(f"Loading {len(batch_paths)} images...")
         load_start = time()
-        images = load_images_parallel(batch_paths, grayscale=True, max_workers=max_workers)
+        images = load_images_parallel(
+            batch_paths, grayscale=True, max_workers=max_workers
+        )
         load_time = time() - load_start
         print(f"Loaded {len(images)} images in {load_time:.2f}s")
 
@@ -273,7 +280,14 @@ def batch_process_images(
             future_to_path = {
                 executor.submit(
                     process_single_image,
-                    img, radii, top_percent, bandwidth_px, power, normalize, include_strength, border_mode
+                    img,
+                    radii,
+                    top_percent,
+                    bandwidth_px,
+                    power,
+                    normalize,
+                    include_strength,
+                    border_mode,
                 ): path
                 for path, img in images.items()
             }
@@ -287,8 +301,10 @@ def batch_process_images(
                     if progress_callback:
                         progress_callback(total_completed, total_images, path)
                     else:
-                        print(f"Completed {total_completed}/{total_images}: {Path(path).name} "
-                              f"(fuse: {result['fuse_time']:.2f}s, kde: {result['kde_time']:.2f}s)")
+                        print(
+                            f"Completed {total_completed}/{total_images}: {Path(path).name} "
+                            f"(fuse: {result['fuse_time']:.2f}s, kde: {result['kde_time']:.2f}s)"
+                        )
                 except Exception as e:
                     print(f"Error processing {path}: {e}")
 
@@ -305,27 +321,33 @@ def batch_process_images(
                 if save_arrays:
                     # Save filter output (fused RDF map)
                     filter_array_path = filter_arrays_path / f"{basename}_filter.npy"
-                    np.save(str(filter_array_path), result['fused'])
+                    np.save(str(filter_array_path), result["fused"])
 
                     # Save KDE output (density map)
                     kde_array_path = kde_arrays_path / f"{basename}_kde.npy"
-                    np.save(str(kde_array_path), result['density'])
+                    np.save(str(kde_array_path), result["density"])
 
                 # Save visualizations (optional)
                 if save_visualizations:
                     # Save filter visualization (grayscale)
                     filter_vis_img_path = filter_vis_path / f"{basename}_filter.png"
-                    fused_max = result['fused'].max()
+                    fused_max = result["fused"].max()
                     if fused_max > 0:
-                        fused_normalized = (result['fused'] / fused_max * 255).astype(np.uint8)
+                        fused_normalized = (result["fused"] / fused_max * 255).astype(
+                            np.uint8
+                        )
                     else:
-                        fused_normalized = np.zeros_like(result['fused'], dtype=np.uint8)
+                        fused_normalized = np.zeros_like(
+                            result["fused"], dtype=np.uint8
+                        )
                     cv2.imwrite(str(filter_vis_img_path), fused_normalized)
 
                     # Save KDE visualization (colored heatmap)
                     kde_vis_img_path = kde_vis_path / f"{basename}_kde.png"
-                    density_normalized = (result['density'] * 255).astype(np.uint8)
-                    density_color = cv2.applyColorMap(density_normalized, cv2.COLORMAP_JET)
+                    density_normalized = (result["density"] * 255).astype(np.uint8)
+                    density_color = cv2.applyColorMap(
+                        density_normalized, cv2.COLORMAP_JET
+                    )
                     cv2.imwrite(str(kde_vis_img_path), density_color)
 
             print(f"Batch {batch_idx + 1} results saved to {output_path}")
@@ -343,9 +365,19 @@ def batch_process_images(
     print(f"All batches completed in {overall_time:.2f}s")
     if output_folder is not None:
         print(f"Results saved to: {output_path}")
-        print(f"Average time per image: {overall_time / total_completed:.2f}s" if total_completed > 0 else "No images processed")
+        avg_msg = (
+            f"Average time per image: {overall_time / total_completed:.2f}s"
+            if total_completed > 0
+            else "No images processed"
+        )
+        print(avg_msg)
     else:
-        print(f"Average time per image: {overall_time / len(all_results):.2f}s" if all_results else "No images processed")
+        avg_msg = (
+            f"Average time per image: {overall_time / len(all_results):.2f}s"
+            if all_results
+            else "No images processed"
+        )
+        print(avg_msg)
     print(f"{'='*60}")
 
     return all_results
@@ -353,8 +385,8 @@ def batch_process_images(
 
 def get_image_files(
     folder_path: Union[str, Path],
-    extensions: Tuple[str, ...] = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif'),
-    recursive: bool = False
+    extensions: Tuple[str, ...] = (".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"),
+    recursive: bool = False,
 ) -> List[Path]:
     """
     Get all image files from a folder.
@@ -390,7 +422,7 @@ def save_results(
     output_folder: Union[str, Path],
     save_arrays: bool = True,
     save_visualizations: bool = False,
-    clear_results: bool = False
+    clear_results: bool = False,
 ):
     """
     Save processing results to disk with organized folder structure.
@@ -434,31 +466,31 @@ def save_results(
         if save_arrays:
             # Save filter output (fused RDF map)
             filter_array_path = filter_arrays_path / f"{basename}_filter.npy"
-            np.save(str(filter_array_path), result['fused'])
+            np.save(str(filter_array_path), result["fused"])
 
             # Save KDE output (density map)
             kde_array_path = kde_arrays_path / f"{basename}_kde.npy"
-            np.save(str(kde_array_path), result['density'])
+            np.save(str(kde_array_path), result["density"])
 
         # Save visualizations (optional)
         if save_visualizations:
             # Save filter visualization (grayscale)
             filter_vis_img_path = filter_vis_path / f"{basename}_filter.png"
-            fused_max = result['fused'].max()
+            fused_max = result["fused"].max()
             if fused_max > 0:
-                fused_normalized = (result['fused'] / fused_max * 255).astype(np.uint8)
+                fused_normalized = (result["fused"] / fused_max * 255).astype(np.uint8)
             else:
-                fused_normalized = np.zeros_like(result['fused'], dtype=np.uint8)
+                fused_normalized = np.zeros_like(result["fused"], dtype=np.uint8)
             cv2.imwrite(str(filter_vis_img_path), fused_normalized)
 
             # Save KDE visualization (colored heatmap)
             kde_vis_img_path = kde_vis_path / f"{basename}_kde.png"
-            density_normalized = (result['density'] * 255).astype(np.uint8)
+            density_normalized = (result["density"] * 255).astype(np.uint8)
             density_color = cv2.applyColorMap(density_normalized, cv2.COLORMAP_JET)
             cv2.imwrite(str(kde_vis_img_path), density_color)
 
     # Print summary
-    print(f"\nResults saved:")
+    print("\nResults saved:")
     if save_arrays:
         print(f"  - Filter arrays: {filter_arrays_path}")
         print(f"  - KDE arrays: {kde_arrays_path}")

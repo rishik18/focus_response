@@ -4,7 +4,9 @@
       "Bash(python -m pytest tests/ -v)",
       "Bash(python:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(flake8:*)",
+      "Bash(conda:*)"
     ],
     "deny": [],
     "ask": []

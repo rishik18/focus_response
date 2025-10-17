@@ -12,7 +12,7 @@ from focus_response import (
     kde_on_fused,
     batch_process_images,
     get_image_files,
-    save_results
+    save_results,
 )
 
 
@@ -50,17 +50,13 @@ class TestCompletePipeline:
         radii = [(1, 3)]
 
         # Step 1: Filter stage
-        fused, maps = fuse_rdf_sum(test_image, radii, power=2, normalize='p99')
+        fused, maps = fuse_rdf_sum(test_image, radii, power=2, normalize="p99")
 
         assert fused.shape == test_image.shape
         assert len(maps) == len(radii)
 
         # Step 2: KDE stage
-        density, threshold = kde_on_fused(
-            fused,
-            top_percent=25.0,
-            bandwidth_px=10.0
-        )
+        density, threshold = kde_on_fused(fused, top_percent=25.0, bandwidth_px=10.0)
 
         assert density.shape == test_image.shape
         assert 0 <= density.min() <= density.max() <= 1
@@ -81,6 +77,7 @@ class TestCompletePipeline:
         # Create a clean temp dir for this test
         import tempfile
         import shutil
+
         test_dir = tempfile.mkdtemp()
 
         try:
@@ -97,17 +94,16 @@ class TestCompletePipeline:
 
             # Process
             results = batch_process_images(
-                image_files,
-                radii=[(1, 3)],
-                max_workers=2,
-                use_processes=False
+                image_files, radii=[(1, 3)], max_workers=2, use_processes=False
             )
 
             assert len(results) == 3
 
             # Save
             output_dir = Path(test_dir) / "output"
-            save_results(results, output_dir, save_arrays=True, save_visualizations=True)
+            save_results(
+                results, output_dir, save_arrays=True, save_visualizations=True
+            )
 
             # Verify outputs
             assert (output_dir / "filter_arrays").exists()
@@ -166,9 +162,9 @@ class TestParameterSensitivity:
         """Test effect of different normalizations."""
         radii = [(1, 3)]
 
-        fused_none, _ = fuse_rdf_sum(test_image, radii, normalize='none')
-        fused_p99, _ = fuse_rdf_sum(test_image, radii, normalize='p99')
-        fused_mad, _ = fuse_rdf_sum(test_image, radii, normalize='mad')
+        fused_none, _ = fuse_rdf_sum(test_image, radii, normalize="none")
+        fused_p99, _ = fuse_rdf_sum(test_image, radii, normalize="p99")
+        fused_mad, _ = fuse_rdf_sum(test_image, radii, normalize="mad")
 
         # All should have valid shapes
         assert fused_none.shape == fused_p99.shape == fused_mad.shape
@@ -286,15 +282,11 @@ class TestErrorHandling:
         img = np.random.rand(100, 100).astype(np.float32)
 
         with pytest.raises(ValueError):
-            fuse_rdf_sum(img, [(1, 3)], normalize='invalid')
+            fuse_rdf_sum(img, [(1, 3)], normalize="invalid")
 
     def test_empty_image_list(self):
         """Test batch processing with empty list."""
-        results = batch_process_images(
-            [],
-            radii=[(1, 3)],
-            use_processes=False
-        )
+        results = batch_process_images([], radii=[(1, 3)], use_processes=False)
 
         # Should return empty dict or handle gracefully
         assert isinstance(results, dict)

@@ -3,7 +3,7 @@
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
-from typing import Tuple, Optional
+from typing import Tuple
 
 
 def _to_uint8_gray(x: np.ndarray) -> np.ndarray:
@@ -42,7 +42,7 @@ def visualize_kde_density(
     density: np.ndarray,
     show_on: str = "image",
     alpha: float = 0.45,
-    figsize: Tuple[int, int] = (10, 8)
+    figsize: Tuple[int, int] = (10, 8),
 ) -> None:
     """
     Overlay the KDE heatmap on either the original image or the fused focus map.

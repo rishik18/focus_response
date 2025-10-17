@@ -11,7 +11,7 @@ def kde_on_fused(
     bandwidth_px: float = 10.0,
     include_strength: bool = False,
     clip_percentile: float = 99.5,
-    normalize: bool = True
+    normalize: bool = True,
 ) -> Tuple[np.ndarray, float]:
     """
     Approximate 2-D KDE by placing impulses at selected pixels and
@@ -41,10 +41,14 @@ def kde_on_fused(
     if clip_percentile is not None:
         # Compute both percentiles at once
         if nz_mask.any():
-            percentiles = np.percentile(fused[nz_mask], [100.0 - float(top_percent), clip_percentile])
+            percentiles = np.percentile(
+                fused[nz_mask], [100.0 - float(top_percent), clip_percentile]
+            )
             thr = percentiles[0]
         else:
-            percentiles = np.percentile(fused, [100.0 - float(top_percent), clip_percentile])
+            percentiles = np.percentile(
+                fused, [100.0 - float(top_percent), clip_percentile]
+            )
             thr = percentiles[0]
     else:
         # Only compute threshold percentile
@@ -66,9 +70,11 @@ def kde_on_fused(
     # Note: ksize=(0,0) lets OpenCV determine kernel from sigma
     # Using BORDER_CONSTANT (zeros) is more appropriate for KDE than BORDER_REPLICATE
     density = cv2.GaussianBlur(
-        impulses, ksize=(0, 0),
-        sigmaX=float(bandwidth_px), sigmaY=float(bandwidth_px),
-        borderType=cv2.BORDER_CONSTANT
+        impulses,
+        ksize=(0, 0),
+        sigmaX=float(bandwidth_px),
+        sigmaY=float(bandwidth_px),
+        borderType=cv2.BORDER_CONSTANT,
     ).astype(np.float32)
 
     # Optional clipping (for nicer visualization) - use pre-computed percentile if available

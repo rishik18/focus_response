@@ -8,10 +8,10 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from focus_response.filters import fuse_rdf_sum
 from focus_response.kde import kde_on_fused
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def visualize_stages(image_path: str):
@@ -30,11 +30,7 @@ def visualize_stages(image_path: str):
     # Stage 1: Filter stage (RDF)
     print("\n[STAGE 1: Ring Difference Filter (RDF)]")
     radii = [(1, 3)]
-    fused, individual_maps = fuse_rdf_sum(
-        img, radii,
-        power=2,
-        normalize="p99"
-    )
+    fused, individual_maps = fuse_rdf_sum(img, radii, power=2, normalize="p99")
 
     print(f"Input image shape: {img.shape}")
     print(f"Input image dtype: {img.dtype}")
@@ -54,11 +50,13 @@ def visualize_stages(image_path: str):
         bandwidth_px=10.0,
         include_strength=False,
         clip_percentile=99.5,
-        normalize=True
+        normalize=True,
     )
 
     print(f"Threshold used: {threshold:.6f}")
-    print(f"Pixels above threshold: {(fused >= threshold).sum()} ({(fused >= threshold).sum() / fused.size * 100:.1f}%)")
+    print(
+        f"Pixels above threshold: {(fused >= threshold).sum()} ({(fused >= threshold).sum() / fused.size * 100:.1f}%)"
+    )
     print(f"\nDensity map shape: {density.shape}")
     print(f"Density map dtype: {density.dtype}")
     print(f"Density map range: [{density.min():.4f}, {density.max():.4f}]")
@@ -70,42 +68,48 @@ def visualize_stages(image_path: str):
     fig, axes = plt.subplots(2, 3, figsize=(15, 10))
 
     # Row 1: Original, RDF output, RDF thresholded
-    axes[0, 0].imshow(img, cmap='gray')
-    axes[0, 0].set_title('Original Image')
-    axes[0, 0].axis('off')
+    axes[0, 0].imshow(img, cmap="gray")
+    axes[0, 0].set_title("Original Image")
+    axes[0, 0].axis("off")
 
-    axes[0, 1].imshow(fused, cmap='hot')
-    axes[0, 1].set_title(f'RDF Output (Fused)\nRange: [{fused.min():.2f}, {fused.max():.2f}]')
-    axes[0, 1].axis('off')
+    axes[0, 1].imshow(fused, cmap="hot")
+    axes[0, 1].set_title(
+        f"RDF Output (Fused)\nRange: [{fused.min():.2f}, {fused.max():.2f}]"
+    )
+    axes[0, 1].axis("off")
     plt.colorbar(axes[0, 1].images[0], ax=axes[0, 1], fraction=0.046)
 
     thresholded = (fused >= threshold).astype(np.float32)
-    axes[0, 2].imshow(thresholded, cmap='gray')
-    axes[0, 2].set_title(f'Thresholded RDF (top {25.0}%)\nThreshold: {threshold:.4f}')
-    axes[0, 2].axis('off')
+    axes[0, 2].imshow(thresholded, cmap="gray")
+    axes[0, 2].set_title(f"Thresholded RDF (top {25.0}%)\nThreshold: {threshold:.4f}")
+    axes[0, 2].axis("off")
 
     # Row 2: Impulses, KDE density, KDE overlay
     impulses = np.where(fused >= threshold, 1.0, 0.0)
-    axes[1, 0].imshow(impulses, cmap='gray')
-    axes[1, 0].set_title(f'KDE Impulses\n{impulses.sum():.0f} points')
-    axes[1, 0].axis('off')
+    axes[1, 0].imshow(impulses, cmap="gray")
+    axes[1, 0].set_title(f"KDE Impulses\n{impulses.sum():.0f} points")
+    axes[1, 0].axis("off")
 
-    axes[1, 1].imshow(density, cmap='jet')
-    axes[1, 1].set_title(f'KDE Density Output\nRange: [{density.min():.2f}, {density.max():.2f}]')
-    axes[1, 1].axis('off')
+    axes[1, 1].imshow(density, cmap="jet")
+    axes[1, 1].set_title(
+        f"KDE Density Output\nRange: [{density.min():.2f}, {density.max():.2f}]"
+    )
+    axes[1, 1].axis("off")
     plt.colorbar(axes[1, 1].images[0], ax=axes[1, 1], fraction=0.046)
 
     # Overlay on original
-    density_colored = cv2.applyColorMap((density * 255).astype(np.uint8), cv2.COLORMAP_JET)
+    density_colored = cv2.applyColorMap(
+        (density * 255).astype(np.uint8), cv2.COLORMAP_JET
+    )
     density_rgb = cv2.cvtColor(density_colored, cv2.COLOR_BGR2RGB)
     img_rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
     overlay = cv2.addWeighted(density_rgb, 0.5, img_rgb, 0.5, 0)
     axes[1, 2].imshow(overlay)
-    axes[1, 2].set_title('KDE Overlay on Original')
-    axes[1, 2].axis('off')
+    axes[1, 2].set_title("KDE Overlay on Original")
+    axes[1, 2].axis("off")
 
     plt.tight_layout()
-    plt.savefig('intermediate_outputs.png', dpi=150, bbox_inches='tight')
+    plt.savefig("intermediate_outputs.png", dpi=150, bbox_inches="tight")
     print("Visualization saved to: intermediate_outputs.png")
     plt.show()
 

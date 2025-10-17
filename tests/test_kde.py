@@ -1,7 +1,6 @@
 """Tests for KDE module."""
 
 import numpy as np
-import pytest
 from focus_response.kde import kde_on_fused
 
 
@@ -57,10 +56,7 @@ class TestKDEOnFused:
         density_large, _ = kde_on_fused(fused, bandwidth_px=20.0)
 
         # Larger bandwidth should give smoother (less variable) result
-        std_small = density_small.std()
-        std_large = density_large.std()
-
-        # This may not always hold due to randomness, so we just check shapes
+        # We just check shapes since the actual smoothness may vary with random data
         assert density_small.shape == density_large.shape
 
     def test_kde_include_strength(self):
