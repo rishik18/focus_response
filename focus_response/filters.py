@@ -31,12 +31,12 @@ def _ring_disk_masks(inner_r: int, outer_r: int) -> Tuple[np.ndarray, np.ndarray
     if inner_r < 0 or outer_r <= inner_r:
         raise ValueError("Require 0 <= inner_r < outer_r.")
     R = outer_r
-    yy, xx = np.ogrid[-R:R+1, -R:R+1]
+    yy, xx = np.ogrid[-R : R + 1, -R : R + 1]
     # Explicitly use int64 to prevent overflow for large radii
-    r2 = (xx.astype(np.int64)**2) + (yy.astype(np.int64)**2)
+    r2 = (xx.astype(np.int64) ** 2) + (yy.astype(np.int64) ** 2)
     inner_r2 = int(inner_r) * int(inner_r)
     outer_r2 = int(outer_r) * int(outer_r)
-    disk = (r2 <= inner_r2)
+    disk = r2 <= inner_r2
     ring = (r2 <= outer_r2) & (~disk)
     if ring.sum() == 0 or disk.sum() == 0:
         raise ValueError("Degenerate kernel; increase outer_r or adjust inner_r.")
@@ -53,22 +53,25 @@ def _ring_disk_masks(inner_r: int, outer_r: int) -> Tuple[np.ndarray, np.ndarray
 def _precompute_common_kernels() -> None:
     """Pre-compute commonly used kernel sizes for instant access."""
     common_radii = [
-        (1, 3),   # Default
-        (2, 5),   # Common multi-scale
-        (3, 7),   # Common multi-scale
-        (1, 2),   # Very small
-        (2, 4),   # Small
-        (3, 6),   # Medium
+        (1, 3),  # Default
+        (2, 5),  # Common multi-scale
+        (3, 7),  # Common multi-scale
+        (1, 2),  # Very small
+        (2, 4),  # Small
+        (3, 6),  # Medium
     ]
     for inner_r, outer_r in common_radii:
         _ring_disk_masks(inner_r, outer_r)
+
 
 # Pre-compute at import time
 _precompute_common_kernels()
 
 
 @lru_cache(maxsize=32)
-def _get_coverage_masks(img_shape: tuple, inner_r: int, outer_r: int) -> Tuple[np.ndarray, np.ndarray]:
+def _get_coverage_masks(
+    img_shape: tuple, inner_r: int, outer_r: int
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Pre-compute coverage masks for edge correction (cached).
 
@@ -111,22 +114,22 @@ def _auto_select_convolution_method(kernel_size: int, image_size: tuple) -> str:
 
     # Kernel represents significant portion of image - use FFT
     if kernel_area / image_area > 0.05:
-        return 'fft'
+        return "fft"
 
     # Very small kernels - OpenCV is highly optimized
     if kernel_size <= 9:
-        return 'opencv'
+        return "opencv"
 
     # Very large kernels - FFT dominates
     if kernel_size >= 20:
-        return 'fft'
+        return "fft"
 
     # Medium kernels on large images - prefer FFT
     if image_area > 4000000 and kernel_size > 15:
-        return 'fft'
+        return "fft"
 
     # Default to scipy for medium cases
-    return 'scipy'
+    return "scipy"
 
 
 def rdf_focus_numpy_edgesafe(
@@ -137,7 +140,7 @@ def rdf_focus_numpy_edgesafe(
     power: int = 2,
     use_fft: bool = None,
     eps: float = 1e-8,
-    border_mode: str = 'reflect'
+    border_mode: str = "reflect",
 ) -> np.ndarray:
     """
     Compute Ring-Difference focus with border correction.
@@ -184,38 +187,41 @@ def rdf_focus_numpy_edgesafe(
         kernel_size = 2 * outer_r + 1
         method = _auto_select_convolution_method(kernel_size, img.shape)
     elif use_fft:
-        method = 'fft'
+        method = "fft"
     else:
-        method = 'opencv'  # Default to OpenCV for small kernels
+        method = "opencv"  # Default to OpenCV for small kernels
 
     # Map border_mode to OpenCV constants
     cv2_border_map = {
-        'constant': cv2.BORDER_CONSTANT,
-        'reflect': cv2.BORDER_REFLECT_101,
-        'replicate': cv2.BORDER_REPLICATE
+        "constant": cv2.BORDER_CONSTANT,
+        "reflect": cv2.BORDER_REFLECT_101,
+        "replicate": cv2.BORDER_REPLICATE,
     }
 
     # Map border_mode to scipy modes
     scipy_mode_map = {
-        'constant': 'constant',
-        'reflect': 'reflect',
-        'replicate': 'nearest'
+        "constant": "constant",
+        "reflect": "reflect",
+        "replicate": "nearest",
     }
 
     if border_mode not in cv2_border_map:
-        raise ValueError(f"border_mode must be one of {list(cv2_border_map.keys())}, got '{border_mode}'")
+        raise ValueError(
+            f"border_mode must be one of {list(cv2_border_map.keys())}, got '{border_mode}'"
+        )
 
-    if method == 'fft':
+    if method == "fft":
         # FFT-based convolution (fast for large kernels)
         # Note: FFT always uses zero-padding (equivalent to 'constant' mode)
         from scipy.signal import oaconvolve
-        if border_mode != 'constant':
+
+        if border_mode != "constant":
             # Pre-pad image with border mode, then crop after convolution
             pad_size = outer_r
-            if border_mode == 'reflect':
-                img_padded = np.pad(img, pad_size, mode='reflect')
-            elif border_mode == 'replicate':
-                img_padded = np.pad(img, pad_size, mode='edge')
+            if border_mode == "reflect":
+                img_padded = np.pad(img, pad_size, mode="reflect")
+            elif border_mode == "replicate":
+                img_padded = np.pad(img, pad_size, mode="edge")
             sum_ring = oaconvolve(img_padded, ring, mode="same")
             sum_disk = oaconvolve(img_padded, disk, mode="same")
             # Crop back to original size
@@ -226,7 +232,7 @@ def rdf_focus_numpy_edgesafe(
             sum_disk = oaconvolve(img, disk, mode="same")
         # Use cached coverage masks (same for all convolution methods)
         cnt_ring, cnt_disk = _get_coverage_masks(img.shape, inner_r, outer_r)
-    elif method == 'opencv':
+    elif method == "opencv":
         # OpenCV filter2D (fastest for small kernels)
         cv2_border = cv2_border_map[border_mode]
         sum_ring = cv2.filter2D(img, -1, ring, borderType=cv2_border)
@@ -236,6 +242,7 @@ def rdf_focus_numpy_edgesafe(
     else:  # scipy
         # Direct spatial convolution (medium kernels)
         from scipy.ndimage import convolve
+
         scipy_mode = scipy_mode_map[border_mode]
         sum_ring = convolve(img, ring, mode=scipy_mode, cval=0.0)
         sum_disk = convolve(img, disk, mode=scipy_mode, cval=0.0)
@@ -262,7 +269,7 @@ def rdf_multiscale(
     power: int = 2,
     use_numba: bool = False,
     parallel: bool = True,
-    border_mode: str = 'reflect'
+    border_mode: str = "reflect",
 ) -> List[np.ndarray]:
     """
     Compute RDF maps at multiple scales with optional parallel processing.
@@ -289,13 +296,25 @@ def rdf_multiscale(
         max_workers = min(len(radii_list), multiprocessing.cpu_count())
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = [
-                executor.submit(rdf_focus_numpy_edgesafe, image, rin, rout, power=power, border_mode=border_mode)
+                executor.submit(
+                    rdf_focus_numpy_edgesafe,
+                    image,
+                    rin,
+                    rout,
+                    power=power,
+                    border_mode=border_mode,
+                )
                 for rin, rout in radii_list
             ]
             maps = [f.result() for f in futures]
     else:
         # Sequential processing
-        maps = [rdf_focus_numpy_edgesafe(image, rin, rout, power=power, border_mode=border_mode) for rin, rout in radii_list]
+        maps = [
+            rdf_focus_numpy_edgesafe(
+                image, rin, rout, power=power, border_mode=border_mode
+            )
+            for rin, rout in radii_list
+        ]
 
     return maps
 
@@ -309,7 +328,7 @@ def fuse_rdf_sum(
     normalize: str = "p99",
     parallel: bool = True,
     downsample: Optional[int] = None,
-    border_mode: str = 'reflect'
+    border_mode: str = "reflect",
 ) -> Tuple[np.ndarray, List[np.ndarray]]:
     """
     Sum-fuse multi-scale RDF maps with optional per-scale normalization.
@@ -345,17 +364,27 @@ def fuse_rdf_sum(
         new_h, new_w = max(1, h // downsample), max(1, w // downsample)
 
         if new_h < 5 or new_w < 5:
-            raise ValueError(f"Downsample factor {downsample} too large for image size {(h, w)}")
+            raise ValueError(
+                f"Downsample factor {downsample} too large for image size {(h, w)}"
+            )
 
         img_proc = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
         # Scale radii accordingly
-        radii_scaled = [(max(1, r1 // downsample), max(2, r2 // downsample))
-                        for r1, r2 in radii]
+        radii_scaled = [
+            (max(1, r1 // downsample), max(2, r2 // downsample)) for r1, r2 in radii
+        ]
     else:
         img_proc = img
         radii_scaled = radii
 
-    maps = rdf_multiscale(img_proc, radii_scaled, power=power, use_numba=use_numba, parallel=parallel, border_mode=border_mode)
+    maps = rdf_multiscale(
+        img_proc,
+        radii_scaled,
+        power=power,
+        use_numba=use_numba,
+        parallel=parallel,
+        border_mode=border_mode,
+    )
     eps = 1e-8
 
     if normalize == "none":
@@ -383,9 +412,18 @@ def fuse_rdf_sum(
 
     # Upsample back to original size if downsampling was used
     if downsample is not None and downsample > 1:
-        fused = cv2.resize(fused, (original_shape[1], original_shape[0]),
-                          interpolation=cv2.INTER_LINEAR)
-        maps = [cv2.resize(m, (original_shape[1], original_shape[0]),
-                          interpolation=cv2.INTER_LINEAR) for m in maps]
+        fused = cv2.resize(
+            fused,
+            (original_shape[1], original_shape[0]),
+            interpolation=cv2.INTER_LINEAR,
+        )
+        maps = [
+            cv2.resize(
+                m,
+                (original_shape[1], original_shape[0]),
+                interpolation=cv2.INTER_LINEAR,
+            )
+            for m in maps
+        ]
 
     return fused, maps

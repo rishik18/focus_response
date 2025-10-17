@@ -8,14 +8,10 @@ process multiple images in parallel for focus detection.
 import sys
 from pathlib import Path
 
+from focus_response.batch import batch_process_images, get_image_files, save_results
+
 # Add parent directory to path to import focus_response
 sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from focus_response.batch import (
-    batch_process_images,
-    get_image_files,
-    save_results
-)
 
 
 def main():
@@ -32,7 +28,9 @@ def main():
 
     # Parallelization settings
     max_workers = None  # Use all CPU cores
-    use_processes = False  # Use threads (better for most cases due to GIL release in NumPy/OpenCV)
+    use_processes = (
+        False  # Use threads (better for most cases due to GIL release in NumPy/OpenCV)
+    )
 
     print("=" * 80)
     print("Batch Focus Response Processing")
@@ -66,26 +64,23 @@ def main():
         normalize=normalize,
         include_strength=False,
         max_workers=max_workers,
-        use_processes=use_processes
+        use_processes=use_processes,
     )
 
     # Save results
     if results:
         print(f"\nSaving results to {output_folder}...")
         save_results(
-            results,
-            output_folder,
-            save_arrays=True,
-            save_visualizations=False
+            results, output_folder, save_arrays=True, save_visualizations=False
         )
 
         # Print summary statistics
         print("\n" + "=" * 80)
         print("Processing Summary")
         print("=" * 80)
-        total_fuse = sum(r['fuse_time'] for r in results.values())
-        total_kde = sum(r['kde_time'] for r in results.values())
-        total_time = sum(r['total_time'] for r in results.values())
+        total_fuse = sum(r["fuse_time"] for r in results.values())
+        total_kde = sum(r["kde_time"] for r in results.values())
+        total_time = sum(r["total_time"] for r in results.values())
 
         print(f"Total images processed: {len(results)}")
         print(f"Total fuse time: {total_fuse:.2f}s")

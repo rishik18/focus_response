@@ -13,7 +13,7 @@ from focus_response.batch import (
     process_single_image,
     batch_process_images,
     get_image_files,
-    save_results
+    save_results,
 )
 
 
@@ -94,12 +94,12 @@ class TestProcessSingleImage:
 
         result = process_single_image(img, radii)
 
-        assert 'fused' in result
-        assert 'density' in result
-        assert 'threshold' in result
-        assert 'fuse_time' in result
-        assert 'kde_time' in result
-        assert 'total_time' in result
+        assert "fused" in result
+        assert "density" in result
+        assert "threshold" in result
+        assert "fuse_time" in result
+        assert "kde_time" in result
+        assert "total_time" in result
 
     def test_process_output_shapes(self):
         """Test output shapes."""
@@ -108,8 +108,8 @@ class TestProcessSingleImage:
 
         result = process_single_image(img, radii)
 
-        assert result['fused'].shape == img.shape
-        assert result['density'].shape == img.shape
+        assert result["fused"].shape == img.shape
+        assert result["density"].shape == img.shape
 
     def test_process_multiscale(self):
         """Test with multiple scales."""
@@ -118,7 +118,7 @@ class TestProcessSingleImage:
 
         result = process_single_image(img, radii)
 
-        assert len(result['individual_maps']) == 2
+        assert len(result["individual_maps"]) == 2
 
     def test_process_timing(self):
         """Test that timing values are reasonable."""
@@ -127,10 +127,10 @@ class TestProcessSingleImage:
 
         result = process_single_image(img, radii)
 
-        assert result['fuse_time'] >= 0
-        assert result['kde_time'] >= 0
-        assert result['total_time'] >= result['fuse_time']
-        assert result['total_time'] >= result['kde_time']
+        assert result["fuse_time"] >= 0
+        assert result["kde_time"] >= 0
+        assert result["total_time"] >= result["fuse_time"]
+        assert result["total_time"] >= result["kde_time"]
 
 
 class TestBatchProcessImages:
@@ -140,10 +140,7 @@ class TestBatchProcessImages:
         """Test basic batch processing."""
         radii = [(1, 3)]
         results = batch_process_images(
-            test_images,
-            radii=radii,
-            max_workers=2,
-            use_processes=False
+            test_images, radii=radii, max_workers=2, use_processes=False
         )
 
         assert len(results) == len(test_images)
@@ -155,17 +152,11 @@ class TestBatchProcessImages:
         radii = [(1, 3)]
 
         results_thread = batch_process_images(
-            test_images,
-            radii=radii,
-            use_processes=False,
-            max_workers=2
+            test_images, radii=radii, use_processes=False, max_workers=2
         )
 
         results_process = batch_process_images(
-            test_images,
-            radii=radii,
-            use_processes=True,
-            max_workers=2
+            test_images, radii=radii, use_processes=True, max_workers=2
         )
 
         assert len(results_thread) == len(results_process)
@@ -180,7 +171,7 @@ class TestBatchProcessImages:
             top_percent=30.0,
             bandwidth_px=15.0,
             power=1,
-            normalize='mad'
+            normalize="mad",
         )
 
         assert len(results) > 0
@@ -197,7 +188,14 @@ class TestGetImageFiles:
         assert len(files) >= len(test_images)
         for f in files:
             assert f.exists()
-            assert f.suffix.lower() in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif']
+            assert f.suffix.lower() in [
+                ".jpg",
+                ".jpeg",
+                ".png",
+                ".bmp",
+                ".tiff",
+                ".tif",
+            ]
 
     def test_get_files_recursive(self, temp_dir, test_images):
         """Test recursive file discovery."""
@@ -217,6 +215,7 @@ class TestGetImageFiles:
         # Create a clean temp dir for this test
         import tempfile
         import shutil
+
         test_dir = tempfile.mkdtemp()
 
         try:
@@ -225,9 +224,9 @@ class TestGetImageFiles:
             cv2.imwrite(str(Path(test_dir) / "test.jpg"), img)
             cv2.imwrite(str(Path(test_dir) / "test.png"), img)
 
-            files = get_image_files(test_dir, extensions=('.jpg',))
+            files = get_image_files(test_dir, extensions=(".jpg",))
             # May find duplicates due to case-insensitive matching
-            jpg_files = [f for f in files if f.suffix.lower() == '.jpg']
+            jpg_files = [f for f in files if f.suffix.lower() == ".jpg"]
             assert len(jpg_files) >= 1
         finally:
             shutil.rmtree(test_dir)
@@ -244,10 +243,10 @@ class TestSaveResults:
     def test_save_arrays_only(self, temp_dir):
         """Test saving only arrays."""
         results = {
-            'test.jpg': {
-                'fused': np.random.rand(100, 100).astype(np.float32),
-                'density': np.random.rand(100, 100).astype(np.float32),
-                'threshold': 0.5
+            "test.jpg": {
+                "fused": np.random.rand(100, 100).astype(np.float32),
+                "density": np.random.rand(100, 100).astype(np.float32),
+                "threshold": 0.5,
             }
         }
 
@@ -268,10 +267,10 @@ class TestSaveResults:
     def test_save_visualizations_only(self, temp_dir):
         """Test saving only visualizations."""
         results = {
-            'test.jpg': {
-                'fused': np.random.rand(100, 100).astype(np.float32),
-                'density': np.random.rand(100, 100).astype(np.float32),
-                'threshold': 0.5
+            "test.jpg": {
+                "fused": np.random.rand(100, 100).astype(np.float32),
+                "density": np.random.rand(100, 100).astype(np.float32),
+                "threshold": 0.5,
             }
         }
 
@@ -292,10 +291,10 @@ class TestSaveResults:
     def test_save_both(self, temp_dir):
         """Test saving both arrays and visualizations."""
         results = {
-            'test.jpg': {
-                'fused': np.random.rand(100, 100).astype(np.float32),
-                'density': np.random.rand(100, 100).astype(np.float32),
-                'threshold': 0.5
+            "test.jpg": {
+                "fused": np.random.rand(100, 100).astype(np.float32),
+                "density": np.random.rand(100, 100).astype(np.float32),
+                "threshold": 0.5,
             }
         }
 
@@ -310,10 +309,10 @@ class TestSaveResults:
     def test_save_multiple_results(self, temp_dir):
         """Test saving multiple results."""
         results = {
-            f'test_{i}.jpg': {
-                'fused': np.random.rand(100, 100).astype(np.float32),
-                'density': np.random.rand(100, 100).astype(np.float32),
-                'threshold': 0.5
+            f"test_{i}.jpg": {
+                "fused": np.random.rand(100, 100).astype(np.float32),
+                "density": np.random.rand(100, 100).astype(np.float32),
+                "threshold": 0.5,
             }
             for i in range(3)
         }
@@ -331,17 +330,19 @@ class TestSaveResults:
         original_density = np.random.rand(100, 100).astype(np.float32)
 
         results = {
-            'test.jpg': {
-                'fused': original_fused,
-                'density': original_density,
-                'threshold': 0.5
+            "test.jpg": {
+                "fused": original_fused,
+                "density": original_density,
+                "threshold": 0.5,
             }
         }
 
         save_results(results, temp_dir, save_arrays=True, save_visualizations=False)
 
         # Load back
-        loaded_fused = np.load(str(Path(temp_dir) / "filter_arrays" / "test_filter.npy"))
+        loaded_fused = np.load(
+            str(Path(temp_dir) / "filter_arrays" / "test_filter.npy")
+        )
         loaded_density = np.load(str(Path(temp_dir) / "kde_arrays" / "test_kde.npy"))
 
         assert np.allclose(original_fused, loaded_fused)

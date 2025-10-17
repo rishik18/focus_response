@@ -30,7 +30,7 @@ def detect_focus_regions(
     power: int = 2,
     normalize: str = "p99",
     include_strength: bool = False,
-    show_visualizations: bool = True
+    show_visualizations: bool = True,
 ):
     """
     Detect focus regions in an image using RDF and KDE.
@@ -59,10 +59,7 @@ def detect_focus_regions(
     # Build fused RDF focus map
     start = time()
     fused, maps = fuse_rdf_sum(
-        img, radii,
-        power=power,
-        use_numba=False,
-        normalize=normalize
+        img, radii, power=power, use_numba=False, normalize=normalize
     )
     fuse_time = time() - start
 
@@ -74,7 +71,7 @@ def detect_focus_regions(
         bandwidth_px=bandwidth_px,
         include_strength=include_strength,
         clip_percentile=99.5,
-        normalize=True
+        normalize=True,
     )
     kde_time = time() - start
 
@@ -84,13 +81,13 @@ def detect_focus_regions(
         visualize_kde_density(img, fused, density, show_on="focus")
 
     return {
-        'fused': fused,
-        'density': density,
-        'threshold': thr,
-        'individual_maps': maps,
-        'fuse_time': fuse_time,
-        'kde_time': kde_time,
-        'total_time': fuse_time + kde_time
+        "fused": fused,
+        "density": density,
+        "threshold": thr,
+        "individual_maps": maps,
+        "fuse_time": fuse_time,
+        "kde_time": kde_time,
+        "total_time": fuse_time + kde_time,
     }
 
 
@@ -99,74 +96,74 @@ if __name__ == "__main__":
         description="Focus Response Detection - Process images using RDF and KDE"
     )
     parser.add_argument(
-        "-i", "--input",
+        "-i",
+        "--input",
         type=str,
         required=True,
-        help="Input directory containing images or path to single image file"
+        help="Input directory containing images or path to single image file",
     )
     parser.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         type=str,
         required=True,
-        help="Output directory to save results"
+        help="Output directory to save results",
     )
     parser.add_argument(
         "--radii",
         type=str,
         default="1,3",
-        help="RDF radii as comma-separated pairs (e.g., '1,3' or '1,3;2,5;3,7' for multi-scale)"
+        help="RDF radii as comma-separated pairs (e.g., '1,3' or '1,3;2,5;3,7' for multi-scale)",
     )
     parser.add_argument(
         "--top-percent",
         type=float,
         default=25.0,
-        help="Percentage of top focus pixels for KDE (default: 25.0)"
+        help="Percentage of top focus pixels for KDE (default: 25.0)",
     )
     parser.add_argument(
         "--bandwidth",
         type=float,
         default=10.0,
-        help="Gaussian bandwidth for KDE in pixels (default: 10.0)"
+        help="Gaussian bandwidth for KDE in pixels (default: 10.0)",
     )
     parser.add_argument(
         "--power",
         type=int,
         default=2,
         choices=[1, 2],
-        help="Power for RDF computation (1=abs, 2=squared, default: 2)"
+        help="Power for RDF computation (1=abs, 2=squared, default: 2)",
     )
     parser.add_argument(
         "--normalize",
         type=str,
         default="p99",
         choices=["none", "p99", "mad"],
-        help="Normalization method (default: p99)"
+        help="Normalization method (default: p99)",
     )
     parser.add_argument(
         "--workers",
         type=int,
         default=None,
-        help="Number of parallel workers (default: auto-detect CPU count)"
+        help="Number of parallel workers (default: auto-detect CPU count)",
     )
     parser.add_argument(
-        "--no-parallel",
-        action="store_true",
-        help="Disable parallel processing"
+        "--no-parallel", action="store_true", help="Disable parallel processing"
     )
     parser.add_argument(
         "--recursive",
         action="store_true",
-        help="Search for images recursively in subdirectories"
+        help="Search for images recursively in subdirectories",
     )
     parser.add_argument(
         "--save-vis",
         action="store_true",
-        help="Save visualizations (default: only save arrays)"
+        help="Save visualizations (default: only save arrays)",
     )
     parser.add_argument(
         "--no-arrays",
         action="store_true",
-        help="Don't save arrays (only visualizations)"
+        help="Don't save arrays (only visualizations)",
     )
 
     args = parser.parse_args()
@@ -216,11 +213,12 @@ if __name__ == "__main__":
             power=args.power,
             normalize=args.normalize,
             include_strength=False,
-            show_visualizations=False
+            show_visualizations=False,
         )
 
         # Save results
         import numpy as np
+
         basename = input_path.stem
 
         # Create subfolders
@@ -230,8 +228,10 @@ if __name__ == "__main__":
             filter_arrays_path.mkdir(exist_ok=True)
             kde_arrays_path.mkdir(exist_ok=True)
 
-            np.save(str(filter_arrays_path / f"{basename}_filter.npy"), results['fused'])
-            np.save(str(kde_arrays_path / f"{basename}_kde.npy"), results['density'])
+            np.save(
+                str(filter_arrays_path / f"{basename}_filter.npy"), results["fused"]
+            )
+            np.save(str(kde_arrays_path / f"{basename}_kde.npy"), results["density"])
 
         if args.save_vis:
             filter_vis_path = output_path / "filter_vis"
@@ -239,14 +239,18 @@ if __name__ == "__main__":
             filter_vis_path.mkdir(exist_ok=True)
             kde_vis_path.mkdir(exist_ok=True)
 
-            fused_normalized = (results['fused'] / results['fused'].max() * 255).astype(np.uint8)
-            cv2.imwrite(str(filter_vis_path / f"{basename}_filter.png"), fused_normalized)
+            fused_normalized = (results["fused"] / results["fused"].max() * 255).astype(
+                np.uint8
+            )
+            cv2.imwrite(
+                str(filter_vis_path / f"{basename}_filter.png"), fused_normalized
+            )
 
-            density_normalized = (results['density'] * 255).astype(np.uint8)
+            density_normalized = (results["density"] * 255).astype(np.uint8)
             density_color = cv2.applyColorMap(density_normalized, cv2.COLORMAP_JET)
             cv2.imwrite(str(kde_vis_path / f"{basename}_kde.png"), density_color)
 
-        print(f"\nResults:")
+        print("\nResults:")
         print(f"  Fuse time: {results['fuse_time']:.2f}s")
         print(f"  KDE time: {results['kde_time']:.2f}s")
         print(f"  Total time: {results['total_time']:.2f}s")
@@ -274,7 +278,7 @@ if __name__ == "__main__":
             normalize=args.normalize,
             include_strength=False,
             max_workers=args.workers,
-            use_processes=False
+            use_processes=False,
         )
 
         if results:
@@ -282,16 +286,16 @@ if __name__ == "__main__":
                 results,
                 output_path,
                 save_arrays=not args.no_arrays,
-                save_visualizations=args.save_vis
+                save_visualizations=args.save_vis,
             )
 
             # Print summary
             print("\n" + "=" * 80)
             print("Processing Summary")
             print("=" * 80)
-            total_fuse = sum(r['fuse_time'] for r in results.values())
-            total_kde = sum(r['kde_time'] for r in results.values())
-            total_time = sum(r['total_time'] for r in results.values())
+            total_fuse = sum(r["fuse_time"] for r in results.values())
+            total_kde = sum(r["kde_time"] for r in results.values())
+            total_time = sum(r["total_time"] for r in results.values())
 
             print(f"Images processed: {len(results)}")
             print(f"Total fuse time: {total_fuse:.2f}s")

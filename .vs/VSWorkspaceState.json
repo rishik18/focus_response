@@ -1,7 +1,9 @@
 {
   "ExpandedNodes": [
-    ""
+    "",
+    "\\.claude",
+    "\\.claude\\agents"
   ],
-  "SelectedNode": "\\LICENSE",
+  "SelectedNode": "\\.claude\\agents\\code-architect.md",
   "PreviewInSolutionExplorer": false
 }
