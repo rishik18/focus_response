@@ -3,11 +3,14 @@
 A Python library for detecting focus regions in images using Ring Difference Filters (RDF) and Kernel Density Estimation (KDE).
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/24a221e8-0771-4e69-b48d-2129dcb4d337" alt="frame_223" width="600">
+  <img src="https://github.com/user-attachments/assets/24a221e8-0771-4e69-b48d-2129dcb4d337" alt="frame_223" width="49%">
+  <img width="49%" alt="output_2" src="https://github.com/user-attachments/assets/e54b10af-9f7f-4712-9a36-df8e817c2bd0" />
 </p>
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/2ea134f8-b2b3-4436-b22d-cd749de2ed0b" alt="output_1" width="600">
+  <img src="https://github.com/user-attachments/assets/5937f609-c5fe-4aad-807e-d6e50727dfa2" width="49%">
+  <img width="49%" alt="output_3" src="https://github.com/user-attachments/assets/1db67924-085e-4582-b2bf-399a19d71d8b" />
 </p>
+
 
 ## Installation
 
