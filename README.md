@@ -198,6 +198,9 @@ black .
 flake8
 ```
 
+## References
+1. Surh, J., Jeon, H. G., Park, Y., Im, S., Ha, H., & So Kweon, I. (2017). Noise robust depth from focus using a ring difference filter. In Proceedings of the IEEE conference on computer vision and pattern recognition (pp. 6328-6337).
+
 ## License
 
 MIT License - see LICENSE file for details.
