@@ -4,16 +4,16 @@ A Python library for detecting focus regions in images using Ring Difference Fil
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/24a221e8-0771-4e69-b48d-2129dcb4d337" alt="frame_223" width="49%">
-  <img width="49%" alt="output_2" src="https://github.com/user-attachments/assets/d140f9a2-661b-4aed-8903-56f54085f5e9" />
+  <img width="49%" alt="output_2" src="https://github.com/user-attachments/assets/838337d6-6c24-4e88-97c8-88658fd73bff" />
 </p>
 <p align="center">
   <img src="https://github.com/user-attachments/assets/5937f609-c5fe-4aad-807e-d6e50727dfa2" width="49%">
-  <img width="49%" alt="output_3" src="https://github.com/user-attachments/assets/858ccc8e-aff4-478c-94c0-d3b0cd315533" />
+  <img width="49%" alt="output_3" src="https://github.com/user-attachments/assets/aff84eae-30a8-465a-a4a4-4e6fd7a55331" />
 </p>
 
 Above outputs were generated using: 
 ```python
-detect_focus_regions(image_path, normalize="mad",top_percent=75, bandwidth_px =100)
+detect_focus_regions(image_path, normalize="mad",top_percent=30, bandwidth_px =100)
 ```
 
 ## Installation
