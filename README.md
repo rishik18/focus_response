@@ -4,13 +4,12 @@ A Python library for detecting focus regions in images using Ring Difference Fil
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/24a221e8-0771-4e69-b48d-2129dcb4d337" alt="frame_223" width="49%">
-  <img width="49%" alt="output_2" src="https://github.com/user-attachments/assets/e54b10af-9f7f-4712-9a36-df8e817c2bd0" />
+  <img width="49%" alt="output_2" src="https://github.com/user-attachments/assets/d140f9a2-661b-4aed-8903-56f54085f5e9" />
 </p>
 <p align="center">
   <img src="https://github.com/user-attachments/assets/5937f609-c5fe-4aad-807e-d6e50727dfa2" width="49%">
-  <img width="49%" alt="output_3" src="https://github.com/user-attachments/assets/1db67924-085e-4582-b2bf-399a19d71d8b" />
+  <img width="49%" alt="output_3" src="https://github.com/user-attachments/assets/858ccc8e-aff4-478c-94c0-d3b0cd315533" />
 </p>
-
 
 ## Installation
 
