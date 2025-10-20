@@ -5,7 +5,7 @@ Author: Hrishikesh Kanade
 Email: kanade.hrishikesh1994@gmail.com
 """
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 __author__ = "Hrishikesh Kanade"
 __email__ = "rishikanade@outlook.com"
 
