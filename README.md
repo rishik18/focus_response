@@ -1,4 +1,4 @@
-# focus_response v0.1.4
+# focus_response
 
 A Python library for detecting focus regions in images using Ring Difference Filters (RDF) and Kernel Density Estimation (KDE).
 
